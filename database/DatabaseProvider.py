@@ -13,11 +13,11 @@ class DatabaseProvider:
 
         try:
             # Initialize a read-only connection to the database
-            self.connection = sqlite3.connect(f"file:{resolved}?mode=ro", uri=True)
+            self._connection = sqlite3.connect(f"file:{resolved}?mode=ro", uri=True)
         except sqlite3.Error as e:
             raise ConnectionError(
                 f"Failed to connect to database at '{resolved}': {e}"
             ) from e
 
     def get_connection(self) -> sqlite3.Connection:
-        return self.connection
+        return self._connection
