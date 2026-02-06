@@ -6,6 +6,9 @@ specs/
 database/mock.db
 database/*.db
 
+# Environment
+.env
+
 # Python
 __pycache__/
 *.pyc
