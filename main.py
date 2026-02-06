@@ -1,6 +1,6 @@
 import os
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv # type: ignore
 
 from database.DatabaseProvider import DatabaseProvider
 
