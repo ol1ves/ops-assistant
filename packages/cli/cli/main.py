@@ -4,9 +4,9 @@ import os
 
 from dotenv import load_dotenv  # type: ignore
 
-from chatbot.ChatBot import ChatBot
-from database.DatabaseProvider import DatabaseProvider
-from database.QueryExecutor import QueryExecutor
+from chatbot.ChatBot import ChatBot # type: ignore
+from database.DatabaseProvider import DatabaseProvider # type: ignore
+from database.QueryExecutor import QueryExecutor # type: ignore
 
 
 def main():
