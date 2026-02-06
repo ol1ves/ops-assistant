@@ -200,8 +200,8 @@ def parse_args():
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("database/mock.db"),
-        help="Output path for the SQLite database file (default: database/mock.db)",
+        default=Path("data/mock.db"),
+        help="Output path for the SQLite database file (default: data/mock.db)",
     )
     parser.add_argument(
         "--seed",

@@ -3,8 +3,7 @@
 specs/
 
 # Generated database files
-database/mock.db
-database/*.db
+data/*.db
 
 # Environment
 .env
