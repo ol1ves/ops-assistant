@@ -10,8 +10,8 @@ def main():
 
     db_path = os.environ["DB_PATH"]
     db_provider = DatabaseProvider(db_path)
-    cursor = db_provider.get_cursor()
-    print(cursor.execute("SELECT * FROM zones").fetchall())
+    connection = db_provider.get_connection()
+    print(connection.cursor().execute("SELECT * FROM zones").fetchall())
 
 
 if __name__ == "__main__":

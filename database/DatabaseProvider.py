@@ -12,11 +12,11 @@ class DatabaseProvider:
             ) from e
 
         try:
-            self.cursor = sqlite3.connect(str(resolved))
+            self.connection = sqlite3.connect(str(resolved))
         except sqlite3.Error as e:
             raise ConnectionError(
                 f"Failed to connect to database at '{resolved}': {e}"
             ) from e
 
-    def get_cursor(self) -> sqlite3.Cursor:
-        return self.cursor()
+    def get_connection(self) -> sqlite3.Connection:
+        return self.connection
