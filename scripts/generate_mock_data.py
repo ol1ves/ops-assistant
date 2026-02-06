@@ -39,9 +39,9 @@ from database.schema import SCHEMA_SQL
 # =============================================================================
 
 NUM_ZONES = 8
-NUM_ENTITIES = 25
+NUM_ENTITIES = 100
 NUM_PINGS = 550  # Target: 500+ pings
-TIME_WINDOW_DAYS = 7
+TIME_WINDOW_DAYS = 30
 
 
 # =============================================================================
