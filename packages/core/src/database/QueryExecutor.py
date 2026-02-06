@@ -1,3 +1,10 @@
+"""Safe, read-only SQL query executor with multi-step validation.
+
+All queries pass through a validation pipeline that enforces SELECT-only
+execution, blocks dangerous keywords, and rejects SQL injection patterns
+before any statement reaches the database.
+"""
+
 import re
 import sqlite3
 

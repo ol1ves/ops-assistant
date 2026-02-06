@@ -41,6 +41,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Allow all origins so any frontend can consume the API during development.
+# Rate-limit headers are explicitly exposed so clients can read them.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

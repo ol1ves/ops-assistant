@@ -1,3 +1,5 @@
+"""Core chatbot module that orchestrates OpenAI completions with SQL tool calls."""
+
 import json
 from collections.abc import Callable
 
@@ -13,6 +15,12 @@ class ChatBot:
     """Conversational assistant backed by OpenAI with SQL function calling."""
 
     def __init__(self, query_executor: QueryExecutor, api_key: str) -> None:
+        """Initialize the chatbot with a query executor and OpenAI API key.
+
+        Args:
+            query_executor: Validated, read-only SQL executor for database access.
+            api_key: OpenAI API key used to authenticate completion requests.
+        """
         self._executor = query_executor
         self._client = OpenAI(api_key=api_key)
         self._conversations: dict[str, Conversation] = {}

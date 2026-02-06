@@ -1,3 +1,5 @@
+"""Interactive command-line interface for the Ops Assistant chatbot."""
+
 import os
 
 from dotenv import load_dotenv  # type: ignore
@@ -8,6 +10,12 @@ from database.QueryExecutor import QueryExecutor
 
 
 def main():
+    """Run the interactive chatbot REPL.
+
+    Loads environment configuration, initializes the database and chatbot,
+    then enters a read-eval-print loop where the user can ask questions
+    about the location-tracking database.
+    """
     load_dotenv()
 
     db_path = os.environ["DB_PATH"]

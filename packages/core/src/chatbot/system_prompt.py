@@ -1,3 +1,9 @@
+"""System prompt for the Ops Assistant chatbot.
+
+Injects the current date and time so the model can resolve relative time
+references (e.g. "last hour", "today") when generating SQL queries.
+"""
+
 from datetime import datetime
 
 SYSTEM_PROMPT = (

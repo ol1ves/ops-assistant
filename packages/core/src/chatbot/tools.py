@@ -1,3 +1,9 @@
+"""OpenAI function-calling tool definitions for the chatbot.
+
+Exposes a single ``execute_sql_query`` tool that lets the model run read-only
+SQL queries against the location-tracking database.
+"""
+
 # Schema summary provided to the model so it knows what tables/columns exist.
 _DB_SCHEMA_DESCRIPTION = """\
 The SQLite database tracks indoor locations. Tables:
