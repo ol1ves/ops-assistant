@@ -1,0 +1,22 @@
+[project]
+name = "api"
+version = "0.1.0"
+description = "Ops assistant API server"
+requires-python = ">=3.14"
+dependencies = [
+    "core",
+    "fastapi[standard]",
+]
+
+[tool.uv.sources]
+core = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+ops-api = "api.main:serve"
+
+[tool.hatch.build.targets.wheel]
+packages = ["api"]
