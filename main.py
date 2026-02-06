@@ -22,6 +22,8 @@ def main():
     print("Ops Assistant (type 'quit' or 'exit' to stop)")
     print("-" * 48)
 
+    conversation_id = None
+
     while True:
         try:
             user_input = input("\nYou: ").strip()
@@ -35,7 +37,13 @@ def main():
             print("Goodbye!")
             break
 
-        response = bot.chat(user_input)
+        print("\nThinking...")
+        conversation_id, response = bot.process_message(
+            user_input,
+            conversation_id=conversation_id,
+            on_tool_call=lambda sql: print(f"Executed Query: {sql}"),
+        )
+        print("\nThinking...")
         print(f"\nAssistant: {response}")
 
 

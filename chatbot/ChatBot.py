@@ -1,7 +1,9 @@
 import json
+from collections.abc import Callable
 
 from openai import OpenAI  # type: ignore
 
+from chatbot.models import Conversation, Message, ToolCallRecord
 from chatbot.system_prompt import SYSTEM_PROMPT
 from chatbot.tools import TOOLS
 from database.QueryExecutor import QueryExecutor
@@ -13,54 +15,119 @@ class ChatBot:
     def __init__(self, query_executor: QueryExecutor, api_key: str) -> None:
         self._executor = query_executor
         self._client = OpenAI(api_key=api_key)
-        self._messages: list[dict] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-        ]
+        self._conversations: dict[str, Conversation] = {}
 
-    def chat(self, user_message: str) -> str:
-        """Send a user message and return the assistant's response.
+    def create_conversation(self) -> Conversation:
+        """Create a new conversation seeded with the system prompt.
 
-        If the model requests tool calls, they are executed via the
-        QueryExecutor and the results are fed back for a follow-up response.
+        Returns:
+            The newly created Conversation.
+        """
+        conversation = Conversation()
+        conversation.add_message(Message(role="system", content=SYSTEM_PROMPT))
+        self._conversations[conversation.id] = conversation
+        return conversation
+
+    def process_message(
+        self,
+        user_message: str,
+        conversation_id: str | None = None,
+        on_tool_call: Callable[[str], None] | None = None,
+    ) -> tuple[str, str]:
+        """Process a user message within a conversation.
+
+        If no conversation_id is provided (or it is not found), a new
+        conversation is created automatically.
 
         Args:
             user_message: The message from the user.
+            conversation_id: Optional existing conversation identifier.
+            on_tool_call: Optional callback invoked with the SQL query string
+                each time a tool call is executed.
 
         Returns:
-            The assistant's final text reply.
+            A tuple of (conversation_id, assistant_response_text).
         """
-        self._messages.append({"role": "user", "content": user_message})
+        # Resolve or create the conversation
+        conversation = self._conversations.get(conversation_id or "")
+        if conversation is None:
+            conversation = self.create_conversation()
+
+        # Record the user message
+        conversation.add_message(Message(role="user", content=user_message))
+
+        # Build the API messages list and call the model
+        api_messages = [m.to_api_dict() for m in conversation.messages]
 
         response = self._client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=self._messages,
+            messages=api_messages,
             tools=TOOLS,
         )
 
         message = response.choices[0].message
-        self._messages.append(message)
+
+        # Record the assistant message (may contain tool calls)
+        assistant_msg = Message(
+            role="assistant",
+            content=message.content,
+            _raw_tool_calls=(
+                [tc.model_dump() for tc in message.tool_calls]
+                if message.tool_calls
+                else None
+            ),
+        )
+        conversation.add_message(assistant_msg)
 
         # Handle tool calls (may require multiple rounds)
         while message.tool_calls:
+            tool_call_records: list[ToolCallRecord] = []
+
             for tool_call in message.tool_calls:
+                args = json.loads(tool_call.function.arguments)
+                sql_query = args.get("query", "")
+
+                if on_tool_call and sql_query:
+                    on_tool_call(sql_query)
+
                 result = self._handle_tool_call(tool_call)
-                self._messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": result,
-                    }
+                tool_call_records.append(
+                    ToolCallRecord(query=sql_query, response=result)
                 )
+
+                conversation.add_message(
+                    Message(
+                        role="tool",
+                        content=result,
+                        tool_call_id=tool_call.id,
+                    )
+                )
+
+            # Attach tool call records to the preceding assistant message
+            assistant_msg.tool_calls = tool_call_records
+
+            # Re-build API messages and request a follow-up
+            api_messages = [m.to_api_dict() for m in conversation.messages]
 
             response = self._client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=self._messages,
+                messages=api_messages,
                 tools=TOOLS,
             )
-            message = response.choices[0].message
-            self._messages.append(message)
 
-        return message.content or ""
+            message = response.choices[0].message
+            assistant_msg = Message(
+                role="assistant",
+                content=message.content,
+                _raw_tool_calls=(
+                    [tc.model_dump() for tc in message.tool_calls]
+                    if message.tool_calls
+                    else None
+                ),
+            )
+            conversation.add_message(assistant_msg)
+
+        return conversation.id, message.content or ""
 
     def _handle_tool_call(self, tool_call) -> str:
         """Execute a single tool call and return the result as a string."""
