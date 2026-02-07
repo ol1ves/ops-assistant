@@ -31,6 +31,12 @@ export interface ApiConversationDetail {
   messages: ApiMessageSchema[]
 }
 
+export interface RateLimitStatus {
+  limit: number
+  remaining: number
+  reset: string
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -87,6 +93,17 @@ export async function deleteConversation(id: string): Promise<void> {
     const body = await res.text()
     throw new Error(`API error ${res.status}: ${body}`)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Rate limit status
+// ---------------------------------------------------------------------------
+
+export async function getRateLimitStatus(): Promise<RateLimitStatus> {
+  const res = await fetch(`${API_URL}/rate-limit`, {
+    headers: authHeaders(),
+  })
+  return handleResponse<RateLimitStatus>(res)
 }
 
 // ---------------------------------------------------------------------------

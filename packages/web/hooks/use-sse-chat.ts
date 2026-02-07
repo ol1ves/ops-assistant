@@ -8,7 +8,9 @@ import {
   getConversation as apiGetConversation,
   deleteConversation as apiDeleteConversation,
   chatStream,
+  getRateLimitStatus as apiGetRateLimitStatus,
 } from "@/lib/api"
+import type { RateLimitStatus } from "@/lib/api"
 
 function generateId() {
   return Math.random().toString(36).substring(2, 9)
@@ -60,6 +62,7 @@ export function useSseChat() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [rateLimit, setRateLimit] = useState<RateLimitStatus | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const activeConversation = conversations.find((c) => c.id === activeId) ?? null
@@ -90,6 +93,22 @@ export function useSseChat() {
       cancelled = true
     }
   }, [])
+
+  // -----------------------------------------------------------------------
+  // Load rate limit status on mount
+  // -----------------------------------------------------------------------
+  const refreshRateLimit = useCallback(async () => {
+    try {
+      const status = await apiGetRateLimitStatus()
+      setRateLimit(status)
+    } catch {
+      // Ignore failures (e.g., API unavailable or missing auth)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshRateLimit()
+  }, [refreshRateLimit])
 
   // -----------------------------------------------------------------------
   // Load full conversation when selected (if messages not yet loaded)
@@ -259,6 +278,29 @@ export function useSseChat() {
         const response = await chatStream(convId, content, abortController.signal)
 
         if (!response.ok) {
+          if (response.status === 429) {
+            setConversations((prev) =>
+              prev.map((c) => {
+                if (c.id !== convId) return c
+                return {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          content:
+                            "Rate limit reached. Please wait for the reset and try again.",
+                          isStreaming: false,
+                          statusText: undefined,
+                        }
+                      : m
+                  ),
+                }
+              })
+            )
+            return
+          }
+
           const errorText = await response.text()
           throw new Error(`API error ${response.status}: ${errorText}`)
         }
@@ -477,9 +519,10 @@ export function useSseChat() {
       } finally {
         setIsStreaming(false)
         abortControllerRef.current = null
+        await refreshRateLimit()
       }
     },
-    [activeId]
+    [activeId, refreshRateLimit]
   )
 
   // -----------------------------------------------------------------------
@@ -509,5 +552,6 @@ export function useSseChat() {
     deleteConversation,
     sendMessage,
     stopStreaming,
+    rateLimit,
   }
 }
