@@ -54,7 +54,7 @@ The key must match one of the comma-separated values in the `API_KEYS` environme
 
 ## Rate Limiting
 
-The chat endpoint (`POST /conversations/{id}/chat`) is rate-limited per API key using a sliding one-hour window. The default limit is 20 requests per hour, configurable via `RATE_LIMIT_PER_HOUR`.
+The chat endpoints (`POST /conversations/{id}/chat` and `POST /conversations/{id}/chat/stream`) are rate-limited per API key using a sliding one-hour window. The default limit is 20 requests per hour, configurable via `RATE_LIMIT_PER_HOUR`.
 
 Rate limit info is returned in both response headers and the response body.
 
@@ -229,6 +229,83 @@ Send a user message and receive the assistant's reply. This endpoint is **rate-l
 
 ---
 
+### Chat (Streaming)
+
+#### `POST /conversations/{conversation_id}/chat/stream`
+
+Send a user message and receive the assistant's reply as a **Server-Sent Events** stream. Each SSE message has an `event` field indicating its type and a JSON `data` payload. This endpoint is **rate-limited**.
+
+**Path Parameters**
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `conversation_id` | string | The conversation ID |
+
+**Request Body** `application/json`
+
+```json
+{
+  "message": "How many entities were in Zone A last hour?"
+}
+```
+
+**Response** `200 OK` (`text/event-stream`)
+
+The response is a stream of SSE events. Each event follows the format:
+
+```
+event: <type>
+data: <json>
+```
+
+**Event Types**
+
+| Event | Payload Fields | Description |
+| --- | --- | --- |
+| `status` | `type`, `status` | Processing phase (e.g. `"thinking"`) |
+| `tool_call` | `type`, `query` | A SQL query is about to be executed |
+| `tool_result` | `type`, `query`, `success` | Query finished; `success` is a boolean |
+| `token` | `type`, `token` | A single content token from the model |
+| `done` | `type`, `conversation_id`, `response` | Final response with full assembled text |
+| `error` | `type`, `message` | An error occurred during processing |
+
+**Example Stream**
+
+```
+event: status
+data: {"type": "status", "status": "thinking"}
+
+event: tool_call
+data: {"type": "tool_call", "query": "SELECT COUNT(*) FROM entities e JOIN location_pings lp ON e.id = lp.entity_id JOIN zones z ON lp.zone_id = z.id WHERE z.name = 'Zone A' AND lp.timestamp >= datetime('now', '-1 hour')"}
+
+event: tool_result
+data: {"type": "tool_result", "query": "SELECT COUNT(*) ...", "success": true}
+
+event: status
+data: {"type": "status", "status": "thinking"}
+
+event: token
+data: {"type": "token", "token": "Based"}
+
+event: token
+data: {"type": "token", "token": " on"}
+
+event: token
+data: {"type": "token", "token": " the"}
+
+event: done
+data: {"type": "done", "conversation_id": "a1b2c3d4e5f6...", "response": "Based on the query results, there were 4 entities in Zone A during the last hour."}
+```
+
+**Error Responses**
+
+| Status | Condition |
+| --- | --- |
+| `404 Not Found` | Conversation does not exist |
+| `429 Too Many Requests` | Rate limit exceeded |
+
+---
+
 ### Rate Limit Status
 
 #### `GET /rate-limit`
@@ -250,9 +327,12 @@ Check the current rate-limit status for your API key without consuming a request
 ## Typical Frontend Flow
 
 ```
-1.  POST   /conversations                → Create a conversation, store the id
-2.  POST   /conversations/{id}/chat      → Send messages, display responses
-3.  GET    /conversations/{id}           → Reload message history if needed
-4.  GET    /rate-limit                   → Show remaining requests in the UI
-5.  DELETE /conversations/{id}           → Clean up when the user is done
+1.  POST   /conversations                     → Create a conversation, store the id
+2.  POST   /conversations/{id}/chat           → Send messages, display responses
+    POST   /conversations/{id}/chat/stream    → (or) stream tokens via SSE
+3.  GET    /conversations/{id}                → Reload message history if needed
+4.  GET    /rate-limit                        → Show remaining requests in the UI
+5.  DELETE /conversations/{id}                → Clean up when the user is done
 ```
+
+For real-time UIs, prefer the `/chat/stream` endpoint. It lets you show a typing indicator during the `status` phase, display SQL queries as they execute (`tool_call` / `tool_result`), and render tokens incrementally as they arrive.

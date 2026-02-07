@@ -34,7 +34,11 @@ class DatabaseProvider:
 
         try:
             # Initialize a read-only connection to the database
-            self._connection = sqlite3.connect(f"file:{resolved}?mode=ro", uri=True)
+            # Note: We use check_same_thread=False to allow multiple threads to access the database.
+            # This is safe because the connection is read-only.
+            self._connection = sqlite3.connect(
+                f"file:{resolved}?mode=ro", uri=True, check_same_thread=False
+            )
         except sqlite3.Error as e:
             raise ConnectionError(
                 f"Failed to connect to database at '{resolved}': {e}"

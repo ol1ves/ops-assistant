@@ -34,8 +34,11 @@ All API endpoints (except the health check) require a Bearer token. Valid keys a
 ### Per-Key Sliding-Window Rate Limiting
 The chat endpoint is rate-limited per API key using an in-memory sliding window (default: 20 requests/hour). Standard `X-RateLimit-*` headers are returned on every chat response so clients can display remaining quota.
 
+### Streaming Responses (SSE)
+The chat endpoint has a streaming variant that delivers tokens in real time via Server-Sent Events. Clients receive granular events -- `status`, `tool_call`, `tool_result`, `token`, `done`, and `error` -- so the UI can show progress indicators, live SQL queries, and incremental text as the model generates it.
+
 ### Full REST API
-A FastAPI server exposes conversation CRUD, chat, rate-limit status, and a health check. Interactive Swagger documentation is auto-generated at `/docs`.
+A FastAPI server exposes conversation CRUD, chat (with both synchronous and streaming modes), rate-limit status, and a health check. Interactive Swagger documentation is auto-generated at `/docs`.
 
 ### CLI Interface
 An interactive terminal REPL for quick testing. It connects directly to the core chatbot library, prints executed SQL queries in real time, and requires no server setup.

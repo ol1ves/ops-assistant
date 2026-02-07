@@ -1,6 +1,9 @@
 """API route definitions."""
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import StreamingResponse
 
 from api.auth import require_api_key
 from api.rate_limit import get_remaining, get_reset_time, rate_limit, _get_limit
@@ -170,6 +173,45 @@ async def chat(
         conversation_id=conv_id,
         response=reply,
         remaining_requests=remaining,
+    )
+
+
+@router.post("/conversations/{conversation_id}/chat/stream")
+async def chat_stream(
+    conversation_id: str,
+    body: ChatRequest,
+    api_key: str = Depends(rate_limit),
+    bot: ChatBot = Depends(_bot_dependency),
+):
+    """Send a message and stream the assistant's reply as Server-Sent Events.
+
+    Each SSE event has an ``event`` field (status, tool_call, tool_result,
+    token, done, error) and a JSON ``data`` payload.  This endpoint is
+    rate-limited.
+    """
+    if conversation_id not in bot._conversations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
+    def _event_generator():
+        try:
+            for event in bot.process_message_stream(
+                body.message, conversation_id=conversation_id
+            ):
+                yield f"event: {event['type']}\ndata: {json.dumps(event)}\n\n"
+        except Exception as exc:  # noqa: BLE001
+            error_event = {"type": "error", "message": str(exc)}
+            yield f"event: error\ndata: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
     )
 
 
