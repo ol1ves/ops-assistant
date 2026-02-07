@@ -1,2 +1,3 @@
 [tool.uv.workspace]
-members = ["packages/*"]
+# Explicit members so packages/web (Next.js) is not treated as a Python package
+members = ["packages/api", "packages/cli", "packages/core"]
