@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator
 from openai import OpenAI  # type: ignore
 
 from chatbot.models import Conversation, Message, ToolCallRecord
-from chatbot.system_prompt import SYSTEM_PROMPT
+from chatbot.system_prompt import get_system_prompt
 from chatbot.tools import TOOLS
 from database.QueryExecutor import QueryExecutor
 
@@ -32,9 +32,21 @@ class ChatBot:
             The newly created Conversation.
         """
         conversation = Conversation()
-        conversation.add_message(Message(role="system", content=SYSTEM_PROMPT))
+        conversation.add_message(
+            Message(role="system", content=get_system_prompt())
+        )
         self._conversations[conversation.id] = conversation
         return conversation
+
+    @staticmethod
+    def _refresh_system_prompt(conversation: Conversation) -> None:
+        """Update the system message with a freshly-timestamped prompt.
+
+        Must be called before every API request so the model always has
+        the current date/time for resolving relative time references.
+        """
+        if conversation.messages and conversation.messages[0].role == "system":
+            conversation.messages[0].content = get_system_prompt()
 
     def process_message(
         self,
@@ -60,6 +72,9 @@ class ChatBot:
         conversation = self._conversations.get(conversation_id or "")
         if conversation is None:
             conversation = self.create_conversation()
+
+        # Refresh the system prompt so the model sees the current timestamp
+        self._refresh_system_prompt(conversation)
 
         # Record the user message
         conversation.add_message(Message(role="user", content=user_message))
@@ -163,6 +178,9 @@ class ChatBot:
         conversation = self._conversations.get(conversation_id or "")
         if conversation is None:
             conversation = self.create_conversation()
+
+        # Refresh the system prompt so the model sees the current timestamp
+        self._refresh_system_prompt(conversation)
 
         conversation.add_message(Message(role="user", content=user_message))
         api_messages = [m.to_api_dict() for m in conversation.messages]
