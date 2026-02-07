@@ -37,6 +37,9 @@ The chat endpoint is rate-limited per API key using an in-memory sliding window 
 ### Streaming Responses (SSE)
 The chat endpoint has a streaming variant that delivers tokens in real time via Server-Sent Events. Clients receive granular events -- `status`, `tool_call`, `tool_result`, `token`, `done`, and `error` -- so the UI can show progress indicators, live SQL queries, and incremental text as the model generates it.
 
+### Web UI (Next.js)
+A modern chat interface with conversation sidebar, streaming responses, and live SQL query panels. The UI connects to the FastAPI backend via SSE and authenticates using the same API key used by other clients.
+
 ### Full REST API
 A FastAPI server exposes conversation CRUD, chat (with both synchronous and streaming modes), rate-limit status, and a health check. Interactive Swagger documentation is auto-generated at `/docs`.
 
@@ -78,6 +81,13 @@ ops-assistant/
 │       └── cli/
 │           └── main.py        # REPL loop
 │
+├── packages/web/              # Next.js web UI
+│   ├── app/                   # App router pages
+│   ├── components/            # UI + chat components
+│   ├── hooks/                 # SSE chat hook
+│   ├── lib/                   # API client + shared types
+│   └── example.env            # Web env template
+│
 ├── scripts/
 │   └── generate_mock_data.py  # Creates a populated SQLite database
 │
@@ -117,6 +127,13 @@ Edit `.env` and set at minimum:
 | `OPENAI_API_KEY` | Your OpenAI API key |
 | `API_KEYS` | Comma-separated keys for API authentication |
 
+To change the API bind host or port, set:
+
+| Variable | Description | Default |
+|---|---|---|
+| `API_HOST` | Host interface for the API server | `0.0.0.0` |
+| `API_PORT` | Port for the API server | `3000` |
+
 ### 3. Generate mock data
 
 ```bash
@@ -140,6 +157,17 @@ uv run ops-api
 The server starts on `http://localhost:3000` by default. Interactive docs are at `http://localhost:3000/docs`.
 
 See [packages/api/API.md](packages/api/API.md) for complete endpoint documentation.
+
+### 6. Run the web UI
+
+```bash
+cd packages/web
+pnpm install
+cp example.env .env.local
+pnpm dev
+```
+
+The web UI runs on `http://localhost:8000`. Ensure `NEXT_PUBLIC_API_URL` in [packages/web/example.env](packages/web/example.env) points to your API server (default: `http://localhost:3000`) and `NEXT_PUBLIC_API_KEY` matches one of your `API_KEYS`.
 
 ---
 

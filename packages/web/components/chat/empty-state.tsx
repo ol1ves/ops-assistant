@@ -5,8 +5,8 @@ import { Users, BarChart3, Clock, MapPin } from "lucide-react"
 const suggestions = [
   {
     icon: Users,
-    title: "Customer count",
-    description: "How many customers are currently in the store?",
+    title: "Entity count",
+    description: "How many entities were seen in the store yesterday?",
   },
   {
     icon: BarChart3,
@@ -20,8 +20,8 @@ const suggestions = [
   },
   {
     icon: MapPin,
-    title: "Track entities",
-    description: "Which employees are on the sales floor right now?",
+    title: "Location Pings",
+    description: "Summarize the location pings?",
   },
 ]
 
