@@ -3,7 +3,8 @@
 import json
 from collections.abc import Callable, Generator
 
-from openai import OpenAI  # type: ignore
+import tiktoken # type: ignore
+from openai import BadRequestError, OpenAI  # type: ignore
 
 from chatbot.models import Conversation, Message, ToolCallRecord
 from chatbot.prompts import (
@@ -13,6 +14,14 @@ from chatbot.prompts import (
 )
 from chatbot.tools import TOOLS
 from database.QueryExecutor import QueryExecutor
+
+# Reserve space for tools (~283) and model response. gpt-4o-mini context is 128k.
+MAX_CONTEXT_TOKENS = 128_000
+MAX_REQUEST_TOKENS = MAX_CONTEXT_TOKENS - 5_000
+
+_CONTEXT_LENGTH_MSG = (
+    "Conversation is too long. Please start a new conversation."
+)
 
 
 class ChatBot:
@@ -52,6 +61,70 @@ class ChatBot:
         if conversation.messages and conversation.messages[0].role == "system":
             conversation.messages[0].content = get_system_prompt()
 
+    @staticmethod
+    def _count_tokens_for_messages(encoding: tiktoken.Encoding, messages: list[dict]) -> int:
+        """Return estimated token count for a list of API-style message dicts."""
+        # Per cookbook: 3 tokens per message overhead, plus content; gpt-4o-mini uses 3.
+        tokens_per_message = 3
+        num_tokens = 0
+        for msg in messages:
+            num_tokens += tokens_per_message
+            for key, value in msg.items():
+                if value is None:
+                    continue
+                if isinstance(value, str):
+                    num_tokens += len(encoding.encode(value))
+                elif key == "tool_calls" and isinstance(value, list):
+                    num_tokens += len(encoding.encode(json.dumps(value)))
+                else:
+                    num_tokens += len(encoding.encode(str(value)))
+        num_tokens += 3  # every reply primed with <|start|>assistant<|message|>
+        return num_tokens
+
+    def _build_api_messages(
+        self,
+        conversation: Conversation,
+        system_content: str,
+        max_tokens: int = MAX_REQUEST_TOKENS,
+    ) -> list[dict]:
+        """Build API message list with system first and as many recent turns as fit.
+
+        Does not mutate conversation.messages. Truncates by dropping oldest turns
+        so tool-call chains stay valid.
+        """
+        try:
+            encoding = tiktoken.encoding_for_model("gpt-4o-mini")
+        except KeyError:
+            encoding = tiktoken.get_encoding("o200k_base")
+
+        system_msg = {"role": "system", "content": system_content}
+
+        # Split non-system messages into turns: each turn = user + following assistant/tool
+        rest = conversation.messages[1:]
+        turns: list[list[Message]] = []
+        current_turn: list[Message] = []
+        for m in rest:
+            if m.role == "user":
+                if current_turn:
+                    turns.append(current_turn)
+                current_turn = [m]
+            else:
+                current_turn.append(m)
+        if current_turn:
+            turns.append(current_turn)
+
+        # Include as many full turns from the end as fit
+        tail: list[Message] = []
+        for turn in reversed(turns):
+            candidate = list(turn) + tail
+            msgs = [system_msg] + [x.to_api_dict() for x in candidate]
+            if self._count_tokens_for_messages(encoding, msgs) <= max_tokens:
+                tail = candidate
+            else:
+                break
+
+        return [system_msg] + [m.to_api_dict() for m in tail]
+
     def _process_message_events(
         self,
         user_message: str,
@@ -69,20 +142,40 @@ class ChatBot:
         conversation.add_message(
             Message(role="user", content=user_message, type="request")
         )
-        api_messages = [m.to_api_dict() for m in conversation.messages]
-        api_messages[0]["content"] = (
+        reasoning_system = (
             get_system_prompt() + "\n\n" + get_reasoning_prompt()
+        )
+        api_messages = self._build_api_messages(
+            conversation, reasoning_system
         )
 
         while True:
             yield {"type": "status", "status": "thinking"}
 
-            stream = self._client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=api_messages,
-                tools=TOOLS,
-                stream=True,
-            )
+            try:
+                stream = self._client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=api_messages,
+                    tools=TOOLS,
+                    stream=True,
+                )
+            except BadRequestError as e:
+                if "context_length_exceeded" not in str(e):
+                    raise
+                api_messages = self._build_api_messages(
+                    conversation, reasoning_system, max_tokens=12_000
+                )
+                try:
+                    stream = self._client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=api_messages,
+                        tools=TOOLS,
+                        stream=True,
+                    )
+                except BadRequestError as e2:
+                    if "context_length_exceeded" in str(e2):
+                        raise RuntimeError(_CONTEXT_LENGTH_MSG) from e2
+                    raise
 
             content_parts: list[str] = []
             tool_calls_acc: dict[int, dict] = {}
@@ -195,9 +288,8 @@ class ChatBot:
 
             # If any tool call failed, return to reasoning so the model can retry
             if any_failed:
-                api_messages = [m.to_api_dict() for m in conversation.messages]
-                api_messages[0]["content"] = (
-                    "One or more tool calls failed. Please retry."
+                api_messages = self._build_api_messages(
+                    conversation, "One or more tool calls failed. Please retry."
                 )
                 continue
 
@@ -205,19 +297,39 @@ class ChatBot:
             break
 
         # Interpretation phase: system + interpretation prompt, then conversation
-        api_messages = [m.to_api_dict() for m in conversation.messages]
-        api_messages[0]["content"] = (
+        interpret_system = (
             get_system_prompt() + "\n\n" + get_interpretation_prompt()
+        )
+        api_messages = self._build_api_messages(
+            conversation, interpret_system
         )
 
         yield {"type": "status", "status": "thinking"}
 
-        stream = self._client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=api_messages,
-            tools=TOOLS,
-            stream=True,
-        )
+        try:
+            stream = self._client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=api_messages,
+                tools=TOOLS,
+                stream=True,
+            )
+        except BadRequestError as e:
+            if "context_length_exceeded" not in str(e):
+                raise
+            api_messages = self._build_api_messages(
+                conversation, interpret_system, max_tokens=12_000
+            )
+            try:
+                stream = self._client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=api_messages,
+                    tools=TOOLS,
+                    stream=True,
+                )
+            except BadRequestError as e2:
+                if "context_length_exceeded" in str(e2):
+                    raise RuntimeError(_CONTEXT_LENGTH_MSG) from e2
+                raise
 
         content_parts = []
         for chunk in stream:

@@ -493,6 +493,12 @@ export function useSseChat() {
 
               case "error": {
                 const errorMessage = parsed.message as string
+                const isContextLength =
+                  errorMessage.includes("context_length_exceeded") ||
+                  errorMessage.includes("too long")
+                const fallbackMessage = isContextLength
+                  ? "Conversation is too long. Please start a new conversation."
+                  : `Error: ${errorMessage}`
                 setConversations((prev) =>
                   prev.map((c) => {
                     if (c.id !== convId) return c
@@ -502,9 +508,7 @@ export function useSseChat() {
                         m.id === assistantId
                           ? {
                               ...m,
-                              content:
-                                m.content ||
-                                `Error: ${errorMessage}`,
+                              content: m.content || fallbackMessage,
                               isStreaming: false,
                               statusText: undefined,
                             }
