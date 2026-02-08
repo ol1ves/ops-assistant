@@ -53,8 +53,12 @@ class QueryExecutor:
             ValueError: If the query fails validation.
             RuntimeError: If query execution fails.
         """
-        self._validate_query(query)
-        return self._execute_query(query)
+        # Normalize: allow single trailing semicolon (LLM often outputs it)
+        normalized = query.strip()
+        if normalized.endswith(";"):
+            normalized = normalized[:-1].rstrip()
+        self._validate_query(normalized)
+        return self._execute_query(normalized)
 
     def _validate_query(self, query: str) -> None:
         """Sanitize and validate a SQL query string.
@@ -112,11 +116,15 @@ class QueryExecutor:
         Raises:
             RuntimeError: If the database returns an error during execution.
         """
+        cursor = self._connection.cursor()
         try:
-            cursor = self._connection.cursor()
             cursor.execute(safe_query)
             return cursor.fetchall()
         except sqlite3.Error as e:
+            try:
+                cursor.close()
+            except Exception:
+                pass
             raise RuntimeError(
                 f"Query execution failed: {e}"
             ) from e
