@@ -2,7 +2,7 @@
 
 An AI-powered chatbot for querying an indoor location-tracking database. The assistant uses OpenAI function calling to translate natural-language questions into SQL, execute them against a read-only SQLite database, and return clear, conversational answers.
 
-![Web UI screenshot](assets/Webpage_Screenshot.png)
+![DemoGIF](https://github.com/user-attachments/assets/790c29e3-c6c6-4e7f-bffc-b0df1fdc6410)
 
 ---
 
