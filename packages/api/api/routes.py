@@ -186,9 +186,9 @@ async def chat_stream(
 ):
     """Send a message and stream the assistant's reply as Server-Sent Events.
 
-    Each SSE event has an ``event`` field (status, tool_call, tool_result,
-    token, done, error) and a JSON ``data`` payload.  This endpoint is
-    rate-limited.
+    Each SSE event has an ``event`` field (status, reasoning_token, reasoning,
+    tool_call, tool_result, token, done, error) and a JSON ``data`` payload.
+    This endpoint is rate-limited.
     """
     if conversation_id not in bot._conversations:
         raise HTTPException(

@@ -37,7 +37,7 @@ All API endpoints (except the health check) require a Bearer token. Valid keys a
 The chat endpoint is rate-limited per API key using an in-memory sliding window (default: 20 requests/hour). Standard `X-RateLimit-*` headers are returned on every chat response so clients can display remaining quota.
 
 ### Streaming Responses (SSE)
-The chat endpoint has a streaming variant that delivers tokens in real time via Server-Sent Events. Clients receive granular events -- `status`, `tool_call`, `tool_result`, `token`, `done`, and `error` -- so the UI can show progress indicators, live SQL queries, and incremental text as the model generates it.
+The chat endpoint has a streaming variant that delivers tokens in real time via Server-Sent Events. Clients receive granular events -- `status`, `reasoning_token`, `reasoning`, `tool_call`, `tool_result`, `token`, `done`, and `error` -- so the UI can show progress indicators, live SQL queries, reasoning traces, and incremental text as the model generates it.
 
 ### Web UI (Next.js)
 A modern chat interface with conversation sidebar, streaming responses, and live SQL query panels. The UI connects to the FastAPI backend via SSE and authenticates using the same API key used by other clients.
@@ -63,7 +63,7 @@ ops-assistant/
 │   │       ├── chatbot/
 │   │       │   ├── ChatBot.py          # Orchestrates OpenAI completions + tool calls
 │   │       │   ├── models.py           # Conversation, Message, ToolCallRecord
-│   │       │   ├── system_prompt.py    # Time-aware system prompt
+│   │       │   ├── prompts.py          # Time-aware system prompt
 │   │       │   └── tools.py            # OpenAI tool definitions (execute_sql_query)
 │   │       └── database/
 │   │           ├── DatabaseProvider.py  # Read-only SQLite connection

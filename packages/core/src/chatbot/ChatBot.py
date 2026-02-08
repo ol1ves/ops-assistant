@@ -390,12 +390,14 @@ class ChatBot:
         """Process a user message, yielding SSE-friendly event dicts.
 
         Yields events of the following types:
-            - ``status``      – processing phase (e.g. "thinking")
-            - ``tool_call``   – a SQL query is about to be executed
-            - ``tool_result`` – the query finished (includes success flag)
-            - ``token``       – a single content token from the model
-            - ``done``        – final response with full text
-            - ``error``       – something went wrong
+            - ``status``         – processing phase (e.g. "thinking")
+            - ``reasoning_token`` – a single reasoning token for the UI
+            - ``reasoning``      – full reasoning text before tool calls
+            - ``tool_call``      – a SQL query is about to be executed
+            - ``tool_result``    – the query finished (includes success flag)
+            - ``token``          – a single content token from the model
+            - ``done``           – final response with full text
+            - ``error``          – something went wrong
 
         Args:
             user_message: The message from the user.
