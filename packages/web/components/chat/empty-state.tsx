@@ -6,27 +6,27 @@ const suggestions = [
   {
     icon: Users,
     title: "Who was in Zone A?",
-    description: "Who was in Zone A between 2 and 3 PM yesterday?",
+    description: "Who was in the first zone between 2 and 3 PM yesterday?",
   },
   {
     icon: Clock,
     title: "Dwell time in loading dock",
-    description: "How long did badge_12 stay in the loading dock today?",
+    description: "How long did entities stay in the loading dock today?",
   },
   {
     icon: MapPin,
     title: "Movement between zones",
-    description: "Which entities moved from Lobby to Floor 2?",
+    description: "Which entities moved from between zones in the past day?",
   },
   {
     icon: Locate,
-    title: "Where was forklift_3?",
-    description: "Where was forklift_3 in the last 30 minutes?",
+    title: "Locations?",
+    description: "Where were entities in the last 30 minutes?",
   },
   {
     icon: AlertTriangle,
     title: "Data quality",
-    description: "Flag suspicious location jumps",
+    description: "Identify any anomalies in the location data",
   },
 ]
 
