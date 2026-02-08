@@ -1,9 +1,11 @@
 """
-Schema DDL for the Ops Chatbot indoor location tracking database.
+Schema DDL for the Lumo Ops Assistant in-store location tracking database.
 
 Defines all table structures, constraints, and indexes as a single SQL
 string constant. This module is imported by generate_mock_data.py to
 create the database schema before populating it with mock data.
+
+Target scale: ~10-20 zones, ~5-30 entities (people/assets), ~20K-80K pings/day.
 
 Schema design philosophy:
     - Normalized but not overly complex
@@ -12,32 +14,32 @@ Schema design philosophy:
     - Support both real-time (pings) and derived (events) data
 
 Tables:
-    zones            — Physical areas within the building
-    entities         — Trackable objects and people
-    location_pings   — Real-time location readings (raw data)
+    zones            — Physical areas within the building (lobby, loading_dock, aisle, etc.)
+    entities         — Trackable objects and people (external_id: badge_12, forklift_3)
+    location_pings   — Real-time location readings (raw data; rssi for data quality)
     zone_events      — Derived enter/exit/dwell events (analytical data)
-
-See specs/001-mock-data-script/data-model.md for full entity documentation.
 """
 
 # Complete schema DDL as a single SQL script.
 SCHEMA_SQL = """
 -- ============================================================================
--- ZONES: Physical areas within the building
+-- ZONES: Physical areas within the building (in-store navigation)
 -- ============================================================================
 
 CREATE TABLE zones (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
+    zone_type TEXT,        -- lobby, loading_dock, aisle, floor_landing, department, other
     floor INTEGER NOT NULL,
     department TEXT,
-    polygon_coords TEXT,  -- JSON string for simple boundary
-    metadata TEXT,        -- JSON for extensibility
+    polygon_coords TEXT,   -- JSON string for simple boundary
+    metadata TEXT,         -- JSON for extensibility
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Strategic indexes for common queries
 CREATE INDEX idx_zones_floor ON zones(floor);
+CREATE INDEX idx_zones_zone_type ON zones(zone_type);
 CREATE INDEX idx_zones_department ON zones(department);
 
 -- ============================================================================

@@ -1,27 +1,32 @@
 "use client"
 
-import { Users, BarChart3, Clock, MapPin } from "lucide-react"
+import { Users, Clock, MapPin, Locate, AlertTriangle } from "lucide-react"
 
 const suggestions = [
   {
     icon: Users,
-    title: "Entity count",
-    description: "How many entities were seen in the store yesterday?",
-  },
-  {
-    icon: BarChart3,
-    title: "Foot traffic",
-    description: "Which zone had the most foot traffic today?",
+    title: "Who was in Zone A?",
+    description: "Who was in Zone A between 2 and 3 PM yesterday?",
   },
   {
     icon: Clock,
-    title: "Dwell time",
-    description: "What is the average dwell time by department this week?",
+    title: "Dwell time in loading dock",
+    description: "How long did badge_12 stay in the loading dock today?",
   },
   {
     icon: MapPin,
-    title: "Location Pings",
-    description: "Summarize the location pings?",
+    title: "Movement between zones",
+    description: "Which entities moved from Lobby to Floor 2?",
+  },
+  {
+    icon: Locate,
+    title: "Where was forklift_3?",
+    description: "Where was forklift_3 in the last 30 minutes?",
+  },
+  {
+    icon: AlertTriangle,
+    title: "Data quality",
+    description: "Flag suspicious location jumps",
   },
 ]
 
