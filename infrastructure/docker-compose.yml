@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.api
+    env_file:
+      - ../.env
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+    volumes:
+      - ../data:/app/data
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.web
+    depends_on:
+      - api
+    volumes:
+      - ../packages/web/.env.local:/app/packages/web/.env.local:ro
+    environment:
+      NODE_ENV: production
+    command: sh -c "pnpm build && pnpm start"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

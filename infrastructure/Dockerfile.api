@@ -1,0 +1,20 @@
+FROM python:3.14-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY pyproject.toml /app/pyproject.toml
+COPY packages/core/pyproject.toml /app/packages/core/pyproject.toml
+COPY packages/api/pyproject.toml /app/packages/api/pyproject.toml
+
+COPY packages/core /app/packages/core
+COPY packages/api /app/packages/api
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -e packages/core -e packages/api
+
+EXPOSE 3000
+
+CMD ["ops-api"]
