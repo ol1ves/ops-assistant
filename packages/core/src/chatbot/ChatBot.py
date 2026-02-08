@@ -6,7 +6,11 @@ from collections.abc import Callable, Generator
 from openai import OpenAI  # type: ignore
 
 from chatbot.models import Conversation, Message, ToolCallRecord
-from chatbot.system_prompt import get_system_prompt
+from chatbot.prompts import (
+    get_interpretation_prompt,
+    get_reasoning_prompt,
+    get_system_prompt,
+)
 from chatbot.tools import TOOLS
 from database.QueryExecutor import QueryExecutor
 
@@ -33,7 +37,7 @@ class ChatBot:
         """
         conversation = Conversation()
         conversation.add_message(
-            Message(role="system", content=get_system_prompt())
+            Message(role="system", content=get_system_prompt(), type="system")
         )
         self._conversations[conversation.id] = conversation
         return conversation
@@ -48,132 +52,12 @@ class ChatBot:
         if conversation.messages and conversation.messages[0].role == "system":
             conversation.messages[0].content = get_system_prompt()
 
-    def process_message(
-        self,
-        user_message: str,
-        conversation_id: str | None = None,
-        on_tool_call: Callable[[str], None] | None = None,
-    ) -> tuple[str, str]:
-        """Process a user message within a conversation.
-
-        If no conversation_id is provided (or it is not found), a new
-        conversation is created automatically.
-
-        Args:
-            user_message: The message from the user.
-            conversation_id: Optional existing conversation identifier.
-            on_tool_call: Optional callback invoked with the SQL query string
-                each time a tool call is executed.
-
-        Returns:
-            A tuple of (conversation_id, assistant_response_text).
-        """
-        # Resolve or create the conversation
-        conversation = self._conversations.get(conversation_id or "")
-        if conversation is None:
-            conversation = self.create_conversation()
-
-        # Refresh the system prompt so the model sees the current timestamp
-        self._refresh_system_prompt(conversation)
-
-        # Record the user message
-        conversation.add_message(Message(role="user", content=user_message))
-
-        # Build the API messages list and call the model
-        api_messages = [m.to_api_dict() for m in conversation.messages]
-
-        response = self._client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=api_messages,
-            tools=TOOLS,
-        )
-
-        message = response.choices[0].message
-
-        # Record the assistant message (may contain tool calls)
-        assistant_msg = Message(
-            role="assistant",
-            content=message.content,
-            _raw_tool_calls=(
-                [tc.model_dump() for tc in message.tool_calls]
-                if message.tool_calls
-                else None
-            ),
-        )
-        conversation.add_message(assistant_msg)
-
-        # Handle tool calls (may require multiple rounds)
-        while message.tool_calls:
-            tool_call_records: list[ToolCallRecord] = []
-
-            for tool_call in message.tool_calls:
-                args = json.loads(tool_call.function.arguments)
-                sql_query = args.get("query", "")
-
-                if on_tool_call and sql_query:
-                    on_tool_call(sql_query)
-
-                result = self._handle_tool_call(tool_call)
-                tool_call_records.append(
-                    ToolCallRecord(query=sql_query, response=result)
-                )
-
-                conversation.add_message(
-                    Message(
-                        role="tool",
-                        content=result,
-                        tool_call_id=tool_call.id,
-                    )
-                )
-
-            # Attach tool call records to the preceding assistant message
-            assistant_msg.tool_calls = tool_call_records
-
-            # Re-build API messages and request a follow-up
-            api_messages = [m.to_api_dict() for m in conversation.messages]
-
-            response = self._client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=api_messages,
-                tools=TOOLS,
-            )
-
-            message = response.choices[0].message
-            assistant_msg = Message(
-                role="assistant",
-                content=message.content,
-                _raw_tool_calls=(
-                    [tc.model_dump() for tc in message.tool_calls]
-                    if message.tool_calls
-                    else None
-                ),
-            )
-            conversation.add_message(assistant_msg)
-
-        return conversation.id, message.content or ""
-
-    def process_message_stream(
+    def _process_message_events(
         self,
         user_message: str,
         conversation_id: str | None = None,
     ) -> Generator[dict, None, None]:
-        """Process a user message, yielding SSE-friendly event dicts.
-
-        Yields events of the following types:
-            - ``status``      – processing phase (e.g. "thinking")
-            - ``tool_call``   – a SQL query is about to be executed
-            - ``tool_result`` – the query finished (includes success flag)
-            - ``token``       – a single content token from the model
-            - ``done``        – final response with full text
-            - ``error``       – something went wrong
-
-        Args:
-            user_message: The message from the user.
-            conversation_id: Optional existing conversation identifier.
-
-        Yields:
-            Dicts that the API layer can serialise as SSE events.
-        """
+        """Yield processing events for a user message (internal implementation)."""
         # Resolve or create the conversation
         conversation = self._conversations.get(conversation_id or "")
         if conversation is None:
@@ -182,8 +66,13 @@ class ChatBot:
         # Refresh the system prompt so the model sees the current timestamp
         self._refresh_system_prompt(conversation)
 
-        conversation.add_message(Message(role="user", content=user_message))
+        conversation.add_message(
+            Message(role="user", content=user_message, type="request")
+        )
         api_messages = [m.to_api_dict() for m in conversation.messages]
+        api_messages[0]["content"] = (
+            get_system_prompt() + "\n\n" + get_reasoning_prompt()
+        )
 
         while True:
             yield {"type": "status", "status": "thinking"}
@@ -195,15 +84,12 @@ class ChatBot:
                 stream=True,
             )
 
-            # Accumulate deltas from the streaming response
             content_parts: list[str] = []
             tool_calls_acc: dict[int, dict] = {}
-            finish_reason: str | None = None
 
             for chunk in stream:
                 choice = chunk.choices[0]
                 delta = choice.delta
-                finish_reason = choice.finish_reason or finish_reason
 
                 if delta.content:
                     content_parts.append(delta.content)
@@ -230,9 +116,11 @@ class ChatBot:
 
             full_content = "".join(content_parts) or None
 
-            # No tool calls – the model produced its final answer.
+            # No tool calls – single final answer (output)
             if not tool_calls_acc:
-                assistant_msg = Message(role="assistant", content=full_content)
+                assistant_msg = Message(
+                    role="assistant", content=full_content, type="output"
+                )
                 conversation.add_message(assistant_msg)
                 yield {
                     "type": "done",
@@ -241,7 +129,7 @@ class ChatBot:
                 }
                 return
 
-            # Build raw tool-call dicts for conversation history
+            # Tool calls – add reasoning message, execute tools
             raw_tool_calls = []
             for idx in sorted(tool_calls_acc):
                 tc = tool_calls_acc[idx]
@@ -259,13 +147,13 @@ class ChatBot:
             assistant_msg = Message(
                 role="assistant",
                 content=full_content,
+                type="reasoning",
                 _raw_tool_calls=raw_tool_calls,
             )
             conversation.add_message(assistant_msg)
 
-            # Execute each tool call
             tool_call_records: list[ToolCallRecord] = []
-
+            any_failed = False
             for raw_tc in raw_tool_calls:
                 args = json.loads(raw_tc["function"]["arguments"])
                 sql_query = args.get("query", "")
@@ -278,6 +166,8 @@ class ChatBot:
                 )
 
                 success = "error" not in json.loads(result)
+                if not success:
+                    any_failed = True
                 yield {
                     "type": "tool_result",
                     "query": sql_query,
@@ -292,12 +182,110 @@ class ChatBot:
                         role="tool",
                         content=result,
                         tool_call_id=raw_tc["id"],
+                        type="tool",
                     )
                 )
 
             assistant_msg.tool_calls = tool_call_records
-            api_messages = [m.to_api_dict() for m in conversation.messages]
-            # Loop continues → next iteration calls the model again
+
+            # If any tool call failed, return to reasoning so the model can retry
+            if any_failed:
+                api_messages = [m.to_api_dict() for m in conversation.messages]
+                api_messages[0]["content"] = (
+                    "One or more tool calls failed. Please retry."
+                )
+                continue
+
+            # All tool calls succeeded – proceed to interpretation phase
+            break
+
+        # Interpretation phase: system + interpretation prompt, then conversation
+        api_messages = [m.to_api_dict() for m in conversation.messages]
+        api_messages[0]["content"] = (
+            get_system_prompt() + "\n\n" + get_interpretation_prompt()
+        )
+
+        yield {"type": "status", "status": "thinking"}
+
+        stream = self._client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=api_messages,
+            tools=TOOLS,
+            stream=True,
+        )
+
+        content_parts = []
+        for chunk in stream:
+            choice = chunk.choices[0]
+            delta = choice.delta
+            if delta.content:
+                content_parts.append(delta.content)
+                yield {"type": "token", "token": delta.content}
+
+        interpret_content = "".join(content_parts) or ""
+        interpret_msg = Message(
+            role="assistant", content=interpret_content, type="interpret"
+        )
+        conversation.add_message(interpret_msg)
+        yield {
+            "type": "done",
+            "conversation_id": conversation.id,
+            "response": interpret_content,
+        }
+
+    def process_message(
+        self,
+        user_message: str,
+        conversation_id: str | None = None,
+        on_tool_call: Callable[[str], None] | None = None,
+    ) -> tuple[str, str]:
+        """Process a user message within a conversation.
+
+        If no conversation_id is provided (or it is not found), a new
+        conversation is created automatically.
+
+        Args:
+            user_message: The message from the user.
+            conversation_id: Optional existing conversation identifier.
+            on_tool_call: Optional callback invoked with the SQL query string
+                each time a tool call is executed.
+
+        Returns:
+            A tuple of (conversation_id, assistant_response_text).
+        """
+        for event in self._process_message_events(user_message, conversation_id):
+            if event.get("type") == "tool_call" and on_tool_call:
+                on_tool_call(event.get("query", ""))
+            if event.get("type") == "done":
+                return (
+                    event["conversation_id"],
+                    event.get("response", "") or "",
+                )
+        return ("", "")
+
+    def process_message_stream(
+        self,
+        user_message: str,
+        conversation_id: str | None = None,
+    ) -> Generator[dict, None, None]:
+        """Process a user message, yielding SSE-friendly event dicts.
+
+        Yields events of the following types:
+            - ``status``      – processing phase (e.g. "thinking")
+            - ``tool_call``   – a SQL query is about to be executed
+            - ``tool_result`` – the query finished (includes success flag)
+            - ``token``       – a single content token from the model
+            - ``done``        – final response with full text
+            - ``error``       – something went wrong
+
+        Args:
+            user_message: The message from the user.
+            conversation_id: Optional existing conversation identifier.
+
+        Yields:
+            Dicts that the API layer can serialise as SSE events.
+        """
+        yield from self._process_message_events(user_message, conversation_id)
 
     # ------------------------------------------------------------------
     # Tool execution helpers

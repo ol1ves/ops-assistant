@@ -98,6 +98,7 @@ async def get_conversation(
         MessageSchema(
             role=m.role,
             content=m.content,
+            type=getattr(m, "type", "output"),
             timestamp=m.timestamp.isoformat(),
         )
         for m in conversation.messages

@@ -22,6 +22,7 @@ class MessageSchema(BaseModel):
 
     role: str
     content: str | None
+    type: str
     timestamp: str
 
 

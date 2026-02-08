@@ -21,6 +21,8 @@ class Message:
         role: One of "system", "user", "assistant", or "tool".
         content: The text content of the message (may be None for
             assistant messages that only contain tool calls).
+        type: Semantic type for display: "request", "reasoning", "interpret",
+            "output", "system", or "tool". Defaults by role when not set.
         tool_calls: Records of SQL tool calls and their responses.
         tool_call_id: The tool_call_id for tool-role messages.
         timestamp: When the message was created.
@@ -28,6 +30,7 @@ class Message:
 
     role: str
     content: str | None = None
+    type: str = ""
     tool_calls: list[ToolCallRecord] | None = None
     tool_call_id: str | None = None
     timestamp: datetime = field(default_factory=datetime.now)
@@ -35,6 +38,17 @@ class Message:
     # Raw tool_calls objects from the OpenAI API response, stored so that
     # to_api_dict() can include them verbatim on assistant messages.
     _raw_tool_calls: list | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Set default type from role when type was not provided."""
+        if not self.type and self.role == "user":
+            object.__setattr__(self, "type", "request")
+        elif not self.type and self.role == "system":
+            object.__setattr__(self, "type", "system")
+        elif not self.type and self.role == "tool":
+            object.__setattr__(self, "type", "tool")
+        elif not self.type and self.role == "assistant":
+            object.__setattr__(self, "type", "output")
 
     def to_api_dict(self) -> dict:
         """Serialize this message into the dict format expected by the OpenAI API.
