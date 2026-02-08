@@ -58,11 +58,12 @@ def get_reasoning_prompt() -> str:
         "Follow this structure:\n"
         "1. Identify the intent (presence, dwell, movement, quality check, etc.).\n"
         "2. Resolve any time windows into explicit timestamps.\n"
-        "3. Identify required tables and joins.\n"
+        "3. Identify required tables.\n"
         "4. Decide whether aggregation or window functions are needed.\n"
         "5. Write the SQL query and call `execute_sql_query`.\n\n"
         "If data is required to answer the question, call `execute_sql_query`.\n"
         "Do not interpret results yet. Do not answer the user yet.\n"
+        "Keep queries relatively simple and focused on the question, when in doubt, retrieve more data than necessary.\n"
         "You may call the tool multiple times if necessary."
     )
 

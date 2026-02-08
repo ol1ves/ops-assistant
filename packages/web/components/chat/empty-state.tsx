@@ -5,23 +5,18 @@ import { Users, Clock, MapPin, Locate, AlertTriangle } from "lucide-react"
 const suggestions = [
   {
     icon: Users,
-    title: "Who was in Zone A?",
-    description: "Who was in the first zone between 2 and 3 PM yesterday?",
+    title: "Who was in zones?",
+    description: "Who was in all different zones between 2 and 3 PM yesterday?",
   },
   {
     icon: Clock,
-    title: "Dwell time in loading dock",
-    description: "How long did entities stay in the loading dock today?",
+    title: "Dwell time in zones",
+    description: "How long did entities stay in all different zones today?",
   },
   {
     icon: MapPin,
     title: "Movement between zones",
     description: "Which entities moved from between zones in the past day?",
-  },
-  {
-    icon: Locate,
-    title: "Locations?",
-    description: "Where were entities in the last 30 minutes?",
   },
   {
     icon: AlertTriangle,
