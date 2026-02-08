@@ -1,10 +1,18 @@
 "use client"
 
-import { User } from "lucide-react"
+import { useState, useEffect } from "react"
+import { User, ChevronDown, Brain } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
 import type { Message } from "@/lib/chat-types"
 import { SqlQueryBlock } from "./sql-query-block"
 import { TypingIndicator } from "./typing-indicator"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 function formatTime(date: Date) {
   return new Date(date).toLocaleTimeString([], {
@@ -15,8 +23,23 @@ function formatTime(date: Date) {
 
 export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user"
+  const isStreaming = message.isStreaming ?? false
+  const [reasoningManuallyOpen, setReasoningManuallyOpen] = useState(false)
+  const reasoningOpen = isStreaming || reasoningManuallyOpen
 
-  if (message.isStreaming && !message.content) {
+  useEffect(() => {
+    if (!isStreaming) setReasoningManuallyOpen(false)
+  }, [isStreaming])
+
+  const hasReasoningOrTools =
+    (message.reasoningText && message.reasoningText.length > 0) ||
+    (message.sqlQueries && message.sqlQueries.length > 0)
+
+  if (
+    message.isStreaming &&
+    !message.content &&
+    !hasReasoningOrTools
+  ) {
     return <TypingIndicator statusText={message.statusText} />
   }
 
@@ -72,11 +95,146 @@ export function MessageBubble({ message }: { message: Message }) {
               : "bg-card text-card-foreground border border-border/50 rounded-bl-md"
           )}
         >
-          {message.content}
+          {isUser ? (
+            message.content
+          ) : !message.content && message.isStreaming ? (
+            <span className="text-muted-foreground">Thinking...</span>
+          ) : (
+            <div className="chat-markdown">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => (
+                    <p className="mb-2 last:mb-0">{children}</p>
+                  ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold">{children}</strong>
+                  ),
+                  em: ({ children }) => (
+                    <em className="italic">{children}</em>
+                  ),
+                  code: ({ className, children, ...rest }) =>
+                    className ? (
+                      <code
+                        className="block overflow-x-auto rounded bg-muted px-2 py-1 font-mono text-[12px]"
+                        {...rest}
+                      >
+                        {children}
+                      </code>
+                    ) : (
+                      <code
+                        className="rounded bg-muted/80 px-1 font-mono text-[12px]"
+                        {...rest}
+                      >
+                        {children}
+                      </code>
+                    ),
+                  pre: ({ children }) => (
+                    <pre className="mb-2 overflow-x-auto rounded bg-muted p-2 font-mono text-[12px]">
+                      {children}
+                    </pre>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="mb-2 list-disc pl-4 [&>li]:my-0.5">
+                      {children}
+                    </ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="mb-2 list-decimal pl-4 [&>li]:my-0.5">
+                      {children}
+                    </ol>
+                  ),
+                  h1: ({ children }) => (
+                    <h1 className="mb-1.5 mt-2 text-base font-semibold first:mt-0">
+                      {children}
+                    </h1>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="mb-1 mt-2 text-[13px] font-semibold first:mt-0">
+                      {children}
+                    </h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="mb-1 mt-1.5 text-sm font-semibold first:mt-0">
+                      {children}
+                    </h3>
+                  ),
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-2 border-border pl-3 text-muted-foreground">
+                      {children}
+                    </blockquote>
+                  ),
+                  a: ({ href, children }) => (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline underline-offset-2 hover:no-underline"
+                    >
+                      {children}
+                    </a>
+                  ),
+                  table: ({ children }) => (
+                    <div className="mb-2 overflow-x-auto">
+                      <table className="w-full border-collapse border border-border/50 text-left text-[12px]">
+                        {children}
+                      </table>
+                    </div>
+                  ),
+                  th: ({ children }) => (
+                    <th className="border border-border/50 bg-muted/50 px-2 py-1 font-medium">
+                      {children}
+                    </th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="border border-border/50 px-2 py-1">
+                      {children}
+                    </td>
+                  ),
+                  tr: ({ children }) => (
+                    <tr className="border-b border-border/30 last:border-b-0">
+                      {children}
+                    </tr>
+                  ),
+                }}
+              >
+                {message.content || ""}
+              </ReactMarkdown>
+            </div>
+          )}
           {message.isStreaming && (
             <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-current align-middle" />
           )}
         </div>
+
+        {/* Reasoning (chain of thought) */}
+        {!isUser && message.reasoningText && (
+          <Collapsible
+            className="w-full mt-1"
+            open={reasoningOpen}
+            onOpenChange={setReasoningManuallyOpen}
+          >
+            <CollapsibleTrigger
+              className={cn(
+                "group flex w-full items-center gap-2 rounded-md border border-border/50 px-2.5 py-1.5 text-left text-xs transition-colors",
+                "hover:bg-muted/50 hover:border-border/80"
+              )}
+            >
+              <Brain className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="font-medium text-muted-foreground">
+                {isStreaming ? "Reasoning" : "Reasoned"}
+              </span>
+              <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-1 rounded-b-md border border-t-0 border-border/50 bg-muted/30 px-3 py-2">
+                <pre className="whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground font-sans">
+                  {message.reasoningText}
+                </pre>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
 
         {/* SQL Queries */}
         {message.sqlQueries && message.sqlQueries.length > 0 && (

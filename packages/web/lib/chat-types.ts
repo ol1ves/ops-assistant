@@ -5,6 +5,7 @@ export interface SqlQuery {
   duration?: string
   rowsAffected?: number
   success?: boolean
+  result?: string
 }
 
 export interface Message {
@@ -13,6 +14,7 @@ export interface Message {
   content: string
   timestamp: Date
   sqlQueries?: SqlQuery[]
+  reasoningText?: string
   isStreaming?: boolean
   statusText?: string
 }

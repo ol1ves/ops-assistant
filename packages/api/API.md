@@ -263,8 +263,10 @@ data: <json>
 | Event | Payload Fields | Description |
 | --- | --- | --- |
 | `status` | `type`, `status` | Processing phase (e.g. `"thinking"`) |
+| `reasoning_token` | `type`, `token` | A single token of chain-of-thought reasoning (streamed to the reasoning UI only) |
+| `reasoning` | `type`, `content` | Full chain-of-thought reasoning (sent once before tool calls) |
 | `tool_call` | `type`, `query` | A SQL query is about to be executed |
-| `tool_result` | `type`, `query`, `success` | Query finished; `success` is a boolean |
+| `tool_result` | `type`, `query`, `success`, `result` | Query finished; `success` is a boolean; `result` is the raw JSON response |
 | `token` | `type`, `token` | A single content token from the model |
 | `done` | `type`, `conversation_id`, `response` | Final response with full assembled text |
 | `error` | `type`, `message` | An error occurred during processing |
@@ -275,11 +277,17 @@ data: <json>
 event: status
 data: {"type": "status", "status": "thinking"}
 
+event: reasoning_token
+data: {"type": "reasoning_token", "token": "The user asked..."}
+
+event: reasoning
+data: {"type": "reasoning", "content": "The user asked about entities in Zone A. I'll query the database for counts in the last hour."}
+
 event: tool_call
 data: {"type": "tool_call", "query": "SELECT COUNT(*) FROM entities e JOIN location_pings lp ON e.id = lp.entity_id JOIN zones z ON lp.zone_id = z.id WHERE z.name = 'Zone A' AND lp.timestamp >= datetime('now', '-1 hour')"}
 
 event: tool_result
-data: {"type": "tool_result", "query": "SELECT COUNT(*) ...", "success": true}
+data: {"type": "tool_result", "query": "SELECT COUNT(*) ...", "success": true, "result": "{\"results\": [[4]]}"}
 
 event: status
 data: {"type": "status", "status": "thinking"}

@@ -93,7 +93,8 @@ class ChatBot:
 
                 if delta.content:
                     content_parts.append(delta.content)
-                    yield {"type": "token", "token": delta.content}
+                    # Stream reasoning to the dropdown only (not the main response).
+                    yield {"type": "reasoning_token", "token": delta.content}
 
                 if delta.tool_calls:
                     for tc_delta in delta.tool_calls:
@@ -152,6 +153,9 @@ class ChatBot:
             )
             conversation.add_message(assistant_msg)
 
+            if full_content and full_content.strip():
+                yield {"type": "reasoning", "content": full_content}
+
             tool_call_records: list[ToolCallRecord] = []
             any_failed = False
             for raw_tc in raw_tool_calls:
@@ -172,6 +176,7 @@ class ChatBot:
                     "type": "tool_result",
                     "query": sql_query,
                     "success": success,
+                    "result": result,
                 }
 
                 tool_call_records.append(

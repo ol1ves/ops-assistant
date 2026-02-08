@@ -19,6 +19,8 @@ node_modules/
 .next/
 out/
 *.tsbuildinfo
+.pnpm-store/
+.package-lock.json
 
 # OS
 .DS_Store

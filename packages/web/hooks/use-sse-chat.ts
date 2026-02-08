@@ -348,6 +348,45 @@ export function useSseChat() {
                 break
               }
 
+              case "reasoning_token": {
+                const token = (parsed.token as string) ?? ""
+                setConversations((prev) =>
+                  prev.map((c) => {
+                    if (c.id !== convId) return c
+                    return {
+                      ...c,
+                      messages: c.messages.map((m) =>
+                        m.id === assistantId
+                          ? {
+                              ...m,
+                              reasoningText: (m.reasoningText ?? "") + token,
+                            }
+                          : m
+                      ),
+                    }
+                  })
+                )
+                break
+              }
+
+              case "reasoning": {
+                const content = (parsed.content as string) ?? ""
+                setConversations((prev) =>
+                  prev.map((c) => {
+                    if (c.id !== convId) return c
+                    return {
+                      ...c,
+                      messages: c.messages.map((m) =>
+                        m.id === assistantId
+                          ? { ...m, reasoningText: content }
+                          : m
+                      ),
+                    }
+                  })
+                )
+                break
+              }
+
               case "tool_call": {
                 const query = parsed.query as string
                 const newSqlQuery: SqlQuery = {
@@ -377,6 +416,7 @@ export function useSseChat() {
               case "tool_result": {
                 const query = parsed.query as string
                 const success = parsed.success as boolean
+                const result = parsed.result as string | undefined
                 setConversations((prev) =>
                   prev.map((c) => {
                     if (c.id !== convId) return c
@@ -394,6 +434,7 @@ export function useSseChat() {
                                     ? "Queried database"
                                     : "Query failed",
                                   success,
+                                  result,
                                 }
                               : sq
                           ),
