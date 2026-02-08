@@ -64,6 +64,7 @@ export function useSseChat() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [rateLimit, setRateLimit] = useState<RateLimitStatus | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const streamedRef = useRef({ content: "", reasoningText: "" })
 
   const activeConversation = conversations.find((c) => c.id === activeId) ?? null
 
@@ -272,6 +273,7 @@ export function useSseChat() {
       // Start streaming
       const abortController = new AbortController()
       abortControllerRef.current = abortController
+      streamedRef.current = { content: "", reasoningText: "" }
       setIsStreaming(true)
 
       try {
@@ -350,6 +352,7 @@ export function useSseChat() {
 
               case "reasoning_token": {
                 const token = (parsed.token as string) ?? ""
+                streamedRef.current.reasoningText += token
                 setConversations((prev) =>
                   prev.map((c) => {
                     if (c.id !== convId) return c
@@ -371,6 +374,12 @@ export function useSseChat() {
 
               case "reasoning": {
                 const content = (parsed.content as string) ?? ""
+                // Accumulate across multiple tool-call rounds; do not replace (last round may be empty)
+                const prevReasoning = streamedRef.current.reasoningText
+                streamedRef.current.reasoningText = prevReasoning
+                  ? prevReasoning + "\n\n" + content
+                  : content
+                const accumulated = streamedRef.current.reasoningText
                 setConversations((prev) =>
                   prev.map((c) => {
                     if (c.id !== convId) return c
@@ -378,7 +387,7 @@ export function useSseChat() {
                       ...c,
                       messages: c.messages.map((m) =>
                         m.id === assistantId
-                          ? { ...m, reasoningText: content }
+                          ? { ...m, reasoningText: accumulated }
                           : m
                       ),
                     }
@@ -448,6 +457,7 @@ export function useSseChat() {
 
               case "token": {
                 const token = parsed.token as string
+                streamedRef.current.content += token
                 setConversations((prev) =>
                   prev.map((c) => {
                     if (c.id !== convId) return c
@@ -469,7 +479,15 @@ export function useSseChat() {
               }
 
               case "done": {
-                const finalContent = parsed.response as string
+                const finalContent =
+                  typeof parsed.response === "string" ? parsed.response : ""
+                // Main bubble shows interpretation only; use streamed interpretation tokens if done is empty, never reasoning
+                const keptContent =
+                  finalContent.length > 0
+                    ? finalContent
+                    : streamedRef.current.content.length > 0
+                      ? streamedRef.current.content
+                      : "(No summary was generated. See reasoning and query results above.)"
                 setConversations((prev) =>
                   prev.map((c) => {
                     if (c.id !== convId) return c
@@ -479,7 +497,7 @@ export function useSseChat() {
                         m.id === assistantId
                           ? {
                               ...m,
-                              content: finalContent,
+                              content: keptContent,
                               isStreaming: false,
                               statusText: undefined,
                             }

@@ -149,6 +149,7 @@ class ChatBot:
             conversation, reasoning_system
         )
 
+        last_reasoning_content: str = ""
         while True:
             yield {"type": "status", "status": "thinking"}
 
@@ -246,8 +247,9 @@ class ChatBot:
             )
             conversation.add_message(assistant_msg)
 
-            if full_content and full_content.strip():
-                yield {"type": "reasoning", "content": full_content}
+            # Always emit reasoning so the UI can show the step; use placeholder if model sent no text
+            last_reasoning_content = (full_content or "").strip() or "(Planning step — no model text.)"
+            yield {"type": "reasoning", "content": last_reasoning_content}
 
             tool_call_records: list[ToolCallRecord] = []
             any_failed = False
@@ -303,7 +305,6 @@ class ChatBot:
         api_messages = self._build_api_messages(
             conversation, interpret_system
         )
-
         yield {"type": "status", "status": "thinking"}
 
         try:
@@ -344,6 +345,7 @@ class ChatBot:
             role="assistant", content=interpret_content, type="interpret"
         )
         conversation.add_message(interpret_msg)
+        # Send only the interpretation as the final response; reasoning stays in the reasoning UI
         yield {
             "type": "done",
             "conversation_id": conversation.id,
